@@ -137,6 +137,10 @@ Adds non-linear relationships between features.
 ```python
 from sklearn.preprocessing import PolynomialFeatures
 
+# Fill missing values first
+df[['age', 'salary']] = df[['age', 'salary']].fillna(df[['age', 'salary']].mean())
+
+# Then apply polynomial features
 poly = PolynomialFeatures(degree=2, include_bias=False)
 poly_features = poly.fit_transform(df[['age', 'salary']])
 ```
@@ -185,21 +189,43 @@ Outliers are extreme values that distort models.
 **Why it matters:** Improves model stability.
 
 ```python
-# SelectKBest (statistical test)
-from sklearn.feature_selection import SelectKBest, f_regression
 
-X = df[['age', 'salary']]
-y = df['salary']
+# =========================
+# OUTLIER REMOVAL USING IQR METHOD
+# =========================
 
-selector = SelectKBest(score_func=f_regression, k=1)
-X_new = selector.fit_transform(X, y)
-
-# Remove outliers using IQR
+# Step 1: Calculate Q1 (25th percentile)
+# This means 25% of the salary values are below this number
 Q1 = df['salary'].quantile(0.25)
+
+# Step 2: Calculate Q3 (75th percentile)
+# This means 75% of the salary values are below this number
 Q3 = df['salary'].quantile(0.75)
+
+# Step 3: Calculate IQR (Interquartile Range)
+# This represents the spread of the middle 50% of the data
 IQR = Q3 - Q1
 
-df_out = df[(df['salary'] >= Q1 - 1.5 * IQR) & (df['salary'] <= Q3 + 1.5 * IQR)]
+# Step 4: Define lower and upper bounds for outliers
+# Any value outside this range is considered an outlier
+lower_bound = Q1 - 1.5 * IQR
+upper_bound = Q3 + 1.5 * IQR
+
+# Step 5: Filter the dataset
+# Keep only values within the normal range (remove outliers)
+df_out = df[
+    (df['salary'] >= lower_bound) & 
+    (df['salary'] <= upper_bound)
+]
+
+# =========================
+# SUMMARY:
+# - Q1 → 25% data point
+# - Q3 → 75% data point
+# - IQR → middle 50% spread
+# - 1.5 * IQR rule → standard way to detect outliers
+# - df_out → cleaned dataset without extreme values
+# =========================
 ```
 
 ---
@@ -208,8 +234,8 @@ df_out = df[(df['salary'] >= Q1 - 1.5 * IQR) & (df['salary'] <= Q3 + 1.5 * IQR)]
 Convert text into numerical features.
 
 **Techniques:**
-- Bag of Words
-- TF-IDF
+- Bag of Words : Converts text into numbers by counting how many times each word appears.
+- TF-IDF : Converts text into numbers by weighting words based on importance (frequent in a document but rare across documents)
 
 **Why it matters:** Enables NLP tasks.
 
@@ -218,13 +244,29 @@ from sklearn.feature_extraction.text import CountVectorizer, TfidfVectorizer
 
 text_data = ["machine learning is fun", "feature engineering is important"]
 
+# =========================
 # Bag of Words
+# =========================
 cv = CountVectorizer()
 bow = cv.fit_transform(text_data)
 
+# Print vocabulary (words)
+print("BoW Vocabulary:", cv.get_feature_names_out())
+
+# Print matrix (converted to array for readability)
+print("BoW Matrix:\n", bow.toarray())
+
+# =========================
 # TF-IDF
+# =========================
 tfidf = TfidfVectorizer()
 tfidf_features = tfidf.fit_transform(text_data)
+
+# Print vocabulary
+print("\nTF-IDF Vocabulary:", tfidf.get_feature_names_out())
+
+# Print matrix
+print("TF-IDF Matrix:\n", tfidf_features.toarray())
 ```
 
 ---
@@ -239,8 +281,15 @@ Reduce number of features while keeping important information.
 ```python
 from sklearn.decomposition import PCA
 
+# Define X (your feature matrix)
+X = df[['age', 'salary']]   # select numeric columns
+
+# Apply PCA
 pca = PCA(n_components=2)
 X_pca = pca.fit_transform(X)
+
+# Print result
+print(X_pca)
 ```
 
 ---
@@ -263,8 +312,32 @@ Replace category with mean target value.
 **Why it matters:** Useful for high-cardinality data.
 
 ```python
-# Replace category with mean target value
+# =========================
+# TARGET ENCODING
+# =========================
+
+# Group the data by 'city'
+# For each city, calculate the average (mean) salary
+# Then assign that mean value back to every row of that city
+
 df['city_target_enc'] = df.groupby('city')['salary'].transform('mean')
+
+# Example:
+# Suppose data is:
+# city     salary
+# Delhi    50000
+# Delhi    60000
+# Mumbai   70000
+
+# Then:
+# Delhi mean = (50000 + 60000) / 2 = 55000
+# Mumbai mean = 70000
+
+# Result:
+# city     salary   city_target_enc
+# Delhi    50000    55000
+# Delhi    60000    55000
+# Mumbai   70000    70000
 ```
 
 ---
@@ -275,9 +348,34 @@ Replace category with occurrence count.
 **Why it matters:** Simple and effective for large datasets.
 
 ```python
-# Replace category with frequency count
+# =========================
+# FREQUENCY ENCODING
+# =========================
+
+# Step 1: Count how many times each category appears
+# Example: Delhi → 2 times, Mumbai → 1 time
 freq = df['city'].value_counts()
+
+# Step 2: Replace each category with its frequency
+# Each city name is mapped to its count
 df['city_freq'] = df['city'].map(freq)
+
+# Example:
+# Original data:
+# city
+# Delhi
+# Delhi
+# Mumbai
+
+# freq:
+# Delhi → 2
+# Mumbai → 1
+
+# Result:
+# city     city_freq
+# Delhi    2
+# Delhi    2
+# Mumbai   1
 ```
 
 ---
@@ -288,8 +386,32 @@ Create features using domain knowledge.
 **Why it matters:** Domain knowledge can significantly boost performance.
 
 ```python
-# Create custom transformation using lambda
+# =========================
+# CUSTOM FEATURE USING LAMBDA
+# =========================
+
+# Apply a function to each value in the 'age' column
+# lambda x → takes each age value one by one
+
+# Condition:
+# if age < 30 → assign 'young'
+# else → assign 'old'
+
 df['age_group'] = df['age'].apply(lambda x: 'young' if x < 30 else 'old')
+
+# Example:
+# age
+# 25 → 'young'
+# 32 → 'old'
+# 18 → 'young'
+# 45 → 'old'
+
+# Result:
+# age   age_group
+# 25    young
+# 32    old
+# 18    young
+# 45    old
 ```
 
 ---
